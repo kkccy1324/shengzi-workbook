@@ -1,0 +1,1024 @@
+<title>生字練習簿產生器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="gfont" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: sticky settings panel on the left, stack of A4 page previews on the right; stacks to one column on phones */
+:root {
+  --bg: #eceff0;
+  --panel: #fbfcfc;
+  --ink: #1d2529;
+  --muted: #5b6870;
+  --line: #d3dade;
+  --field: #ffffff;
+  --accent: #2c6a52;
+  --accent-ink: #ffffff;
+  --accent-soft: #dcebe4;
+  --warn: #9a4b1c;
+  --ok: #2f7d55; --ok-soft: #e1f1e8;
+  --poly: #2f62b5; --poly-soft: #e3ebf9;
+  --mis: #a86a00; --mis-soft: #fbefd2;
+  --bad: #c0392b; --bad-soft: #fbe3e0;
+  --font-display: "LXGW WenKai TC", "BiauKai", "DFKai-SB", "KaiTi", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171a; --panel: #1b2226; --ink: #e3e9ec; --muted: #9aa8b0; --line: #313b41;
+    --field: #141a1d; --accent: #7cc3a3; --accent-ink: #0d1a14; --accent-soft: #23362e; --warn: #e3a172;
+    --ok: #6cc596; --ok-soft: #1d3428; --poly: #84aaf0; --poly-soft: #1e2a40;
+    --mis: #e8b44c; --mis-soft: #3a2f17; --bad: #f08a7e; --bad-soft: #3d2220;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171a; --panel: #1b2226; --ink: #e3e9ec; --muted: #9aa8b0; --line: #313b41;
+  --field: #141a1d; --accent: #7cc3a3; --accent-ink: #0d1a14; --accent-soft: #23362e; --warn: #e3a172;
+  --ok: #6cc596; --ok-soft: #1d3428; --poly: #84aaf0; --poly-soft: #1e2a40;
+  --mis: #e8b44c; --mis-soft: #3a2f17; --bad: #f08a7e; --bad-soft: #3d2220;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+a { color: var(--accent); }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header h1 { font-family: var(--font-display); font-size: 30px; font-weight: 700; margin: 0; letter-spacing: 0.04em; text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
+@media (min-width: 900px) {
+  .layout { grid-template-columns: 350px minmax(0, 1fr); }
+  .panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow-y: auto; }
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.label { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; }
+.label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.hint { font-size: 12.5px; color: var(--muted); margin: 0; }
+textarea, input[type="text"], input[type="number"], select {
+  font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%;
+}
+textarea { font-family: var(--font-display); font-size: 20px; line-height: 1.5; min-height: 120px; resize: vertical; }
+textarea:focus-visible, input:focus-visible, select:focus-visible, button:focus-visible, .seg label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { flex: 1; text-align: center; padding: 7px 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.seg label + label { border-left: 1px solid var(--line); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--accent-soft); color: var(--ink); font-weight: 700; }
+.dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.check input { width: 17px; height: 17px; accent-color: var(--accent); }
+.btn {
+  font: inherit; font-weight: 700; background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 11px 14px; cursor: pointer; font-size: 15px;
+}
+.btn:disabled { opacity: 0.55; cursor: progress; }
+.actions { display: flex; gap: 10px; }
+.actions .btn { flex: 1; }
+.btn-alt { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+#print-root { display: none; }
+@media print {
+  @page { size: A4; margin: 0; }
+  :root, body { padding: 0 !important; margin: 0 !important; background: #ffffff !important; }
+  .wrap { display: none !important; }
+  #print-root { display: block; }
+  #print-root img { display: block; width: 210mm; height: 297mm; }
+  #print-root img:not(:last-child) { break-after: page; }
+}
+.btn-line { font: inherit; font-size: 13px; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+#dlmsg { font-size: 13px; margin: 0; min-height: 1.2em; color: var(--muted); }
+#dlmsg.err { color: var(--warn); }
+
+.s-ok { --st: var(--ok); --st-soft: var(--ok-soft); }
+.s-poly { --st: var(--poly); --st-soft: var(--poly-soft); }
+.s-mis { --st: var(--mis); --st-soft: var(--mis-soft); }
+.s-bad { --st: var(--bad); --st-soft: var(--bad-soft); }
+.checkbox-area { display: flex; flex-direction: column; gap: 10px; }
+.zchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.zc {
+  position: relative; display: inline-flex; flex-direction: column; align-items: center; min-width: 48px; padding: 4px 6px 3px;
+  background: var(--st-soft); color: var(--ink); border: 1px solid var(--line); border-bottom: 3px solid var(--st); border-radius: 6px; cursor: pointer; font: inherit;
+}
+.zc b { font-family: var(--font-display); font-size: 21px; font-weight: 400; line-height: 1.2; }
+.zc small { font-family: var(--font-display); font-size: 11.5px; color: var(--muted); min-height: 1.2em; }
+.zc i { position: absolute; top: 1px; right: 4px; font-style: normal; font-size: 11px; font-weight: 700; color: var(--st); }
+.zc[aria-pressed="true"] { outline: 2px solid var(--st); outline-offset: 1px; }
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--st-soft); border: 2px solid var(--st); flex: none; }
+.detail { border: 1px solid var(--line); border-left: 4px solid var(--st); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; background: var(--field); }
+.detail-head { display: flex; align-items: center; gap: 10px; }
+.detail-head b { font-family: var(--font-display); font-size: 34px; font-weight: 400; line-height: 1; }
+.detail-head strong { color: var(--st); font-size: 14px; }
+.detail p { margin: 0; font-size: 13.5px; }
+.readings { display: flex; flex-direction: column; gap: 6px; }
+.rd { display: flex; align-items: baseline; gap: 10px; text-align: left; font: inherit; font-size: 13px; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.rd span:first-child { font-family: var(--font-display); font-size: 17px; min-width: 4.5em; }
+.rd span:last-child { color: var(--muted); }
+.rd.on { border-color: var(--st); background: var(--st-soft); font-weight: 700; }
+.credit { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+.notice { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--mis-soft); color: var(--ink); font-size: 14px; border: 1px solid var(--line); }
+.notice.err { background: var(--bad-soft); border-color: var(--bad); }
+.tabs { display: flex; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; margin-block: -8px; }
+.tabs button { flex: 1; font: inherit; font-size: 15px; font-weight: 700; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 8px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+@media (max-width: 899px) {
+  .layout[data-view="panel"] .preview { display: none; }
+  .layout[data-view="preview"] .panel { display: none; }
+}
+@media (min-width: 900px) { .tabs { display: none; } }
+.preview { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13.5px; color: var(--muted); }
+.chip { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-variant-numeric: tabular-nums; }
+#pages { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+.sheet { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 6px; }
+.sheet canvas { width: 100%; height: auto; display: block; background: #ffffff; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 6px 18px rgba(0,0,0,0.08); }
+.sheet span { font-size: 12px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>生字練習簿產生器</h1>
+    <p>輸入這週的生字，注音會依教育部《國語小字典》自動帶入並校對，範字依教育部標準字體標出筆順，即時排出有十字虛線的田字格練習頁。確認後下載 A4 PDF 列印。</p>
+  </header>
+
+  <p class="notice" id="notice">正在載入…如果這段文字一直沒有消失，代表目前的開啟方式沒有執行頁面程式（例如手機或 App 內的檔案預覽）。請把檔案存到電腦，用 Chrome、Edge 或 Safari 開啟。</p>
+  <script>
+    window.addEventListener('error', e => showProblem(e.message || String(e.error)));
+    window.addEventListener('unhandledrejection', e => showProblem(e.reason && e.reason.message || String(e.reason)));
+    function showProblem(msg) {
+      var n = document.getElementById('notice');
+      n.hidden = false;
+      n.className = 'notice err';
+      n.textContent = '頁面發生錯誤，預覽可能無法顯示。請截圖這段訊息給我：' + msg + '（' + navigator.userAgent + '）';
+    }
+  </script>
+
+  <nav class="tabs" id="tabs" aria-label="切換畫面">
+    <button type="button" data-view="panel" aria-pressed="true">設定</button>
+    <button type="button" data-view="preview" aria-pressed="false" id="tab-preview">預覽</button>
+  </nav>
+
+  <div class="layout" id="layout" data-view="panel">
+    <aside class="panel">
+      <div class="field">
+        <label class="label" for="chars">生字</label>
+        <textarea id="chars" spellcheck="false"></textarea>
+        <p class="hint">只打國字就好，注音會自動帶入。連著打的字（如「長大」）會當成詞語判斷多音字讀音。也可以自己在字後面加注音，例如「長ㄓㄤˇ」。</p>
+      </div>
+
+      <div class="field checkbox-area" id="check-area">
+        <div class="label-row">
+          <span class="label">注音校對</span>
+          <button class="btn-line" id="apply-all" type="button" hidden></button>
+        </div>
+        <div class="zchips" id="zchips"></div>
+        <div class="detail" id="detail" hidden></div>
+        <div class="legend">
+          <span class="s-ok"><i class="sw"></i>綠：讀音已確認</span>
+          <span class="s-poly"><i class="sw"></i>藍：多音字，待你選讀音</span>
+          <span class="s-mis"><i class="sw"></i>黃：注音與字典不符</span>
+          <span class="s-bad"><i class="sw"></i>紅：字典查無此字</span>
+        </div>
+        <p class="hint" id="dict-msg">點一下字可以看讀音和例詞，並改用其他讀音。</p>
+      </div>
+
+      <div class="field">
+        <label class="label" for="title">頁首標題</label>
+        <input id="title" type="text" value="國語生字練習">
+      </div>
+
+      <div class="field">
+        <span class="label">排列方式</span>
+        <div class="seg">
+          <label><input type="radio" name="dir" value="v" id="dir-v" checked>直式・由右而左</label>
+          <label><input type="radio" name="dir" value="h" id="dir-h">橫式</label>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="label" for="size">格子大小</label>
+          <select id="size">
+            <option value="24">大 24 mm</option>
+            <option value="20" selected>中 20 mm</option>
+            <option value="16">小 16 mm</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="repeat">每字練習行數</label>
+          <select id="repeat">
+            <option value="1" selected>1 行</option>
+            <option value="2">2 行</option>
+            <option value="3">3 行</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">描紅方式</span>
+        <div class="seg">
+          <label><input type="radio" name="tmode" value="custom" id="t-custom" checked>自訂格數</label>
+          <label><input type="radio" name="tmode" value="half" id="t-half">一半描紅</label>
+          <label><input type="radio" name="tmode" value="all" id="t-all">全部描紅</label>
+        </div>
+        <p class="hint" id="tmode-hint"></p>
+      </div>
+
+      <div class="field">
+        <span class="label">筆順</span>
+        <div class="seg">
+          <label><input type="radio" name="stroke" value="none" id="k-none">不顯示</label>
+          <label><input type="radio" name="stroke" value="num" id="k-num">標序號</label>
+          <label><input type="radio" name="stroke" value="grid" id="k-grid">分解格</label>
+          <label><input type="radio" name="stroke" value="both" id="k-both" checked>兩者</label>
+        </div>
+        <p class="hint" id="stroke-hint"></p>
+      </div>
+
+      <div class="row2">
+        <div class="field" id="trace-field">
+          <label class="label" for="trace">描紅格數</label>
+          <input id="trace" type="number" min="0" max="12" value="3">
+        </div>
+        <div class="field">
+          <span class="label">注音欄</span>
+          <label class="check"><input type="checkbox" id="zhuyin" checked>附注音欄</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">格線顏色</span>
+        <div class="seg">
+          <label><input type="radio" name="color" value="green" id="c-green" checked><span class="dot" style="background:#3c9468"></span>綠</label>
+          <label><input type="radio" name="color" value="red" id="c-red"><span class="dot" style="background:#cf5d55"></span>紅</label>
+          <label><input type="radio" name="color" value="gray" id="c-gray"><span class="dot" style="background:#8a8f8c"></span>灰</label>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="pdf" type="button">下載 PDF（A4）</button>
+        <button class="btn btn-alt" id="print" type="button" hidden>直接列印</button>
+      </div>
+      <p id="dlmsg" role="status"></p>
+      <p class="credit">注音與例詞資料：教育部《國語小字典》開放資料（2026-09-29 版），依 <a href="https://language.moe.gov.tw/001/Upload/Files/site_content/M0001/respub/index.html" target="_blank" rel="noopener">CC BY-ND 3.0 TW</a> 授權使用。筆順資料：g0v <a href="https://github.com/g0v/zh-stroke-data" target="_blank" rel="noopener">zh-stroke-data</a>，取自教育部常用國字標準字體筆順學習網（CC0）。</p>
+      <p class="hint" id="offline-msg" hidden></p>
+    </aside>
+
+    <section class="preview">
+      <div class="status" id="status"></div>
+      <div id="pages"></div>
+    </section>
+  </div>
+</div>
+
+<div id="print-root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const PAGE = { w: 210, h: 297, m: 12, head: 24, foot: 8 };
+const GRID_COLORS = { green: '#3c9468', red: '#cf5d55', gray: '#8a8f8c' };
+const MODEL_INK = '#1a1a1a';
+const TRACE_INK = '#bfc3c1';
+const KAI = '"LXGW WenKai TC","BiauKai","DFKai-SB","KaiTi",serif';
+const SAMPLE = '我們 上學\n天 好 花 開\n長大';
+const STORE_KEY = 'shengzi-v1';
+const LOOKUP_URL = 'https://dict.concised.moe.edu.tw/search.jsp?md=1&word=';
+const ORDER_INK = '#d0342c';
+const DONE_INK = '#a6a6a6';
+const NUM_FONT = '"Noto Sans TC",Arial,sans-serif';
+const SHARDS = 200;
+const GLYPH = 0.86;
+
+const DICT_ZIP = 'data/dict_mini_2019_20260929.zip';
+const OFFLINE = !!document.getElementById('data-dict-zip');
+
+async function unzip(bytes, want) {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = bytes.length - 22;
+  while (end >= 0 && dv.getUint32(end, true) !== 0x06054b50) end--;
+  if (end < 0) throw new Error('zip');
+  const out = new Map();
+  const dec = new TextDecoder();
+  let p = dv.getUint32(end + 16, true);
+  for (let i = dv.getUint16(end + 10, true); i > 0; i--) {
+    const method = dv.getUint16(p + 10, true);
+    const size = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const local = dv.getUint32(p + 42, true);
+    const name = dec.decode(bytes.subarray(p + 46, p + 46 + nameLen));
+    p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+    if (!want(name)) continue;
+    const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+    const data = bytes.subarray(start, start + size);
+    out.set(name, method === 0 ? data
+      : new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()));
+  }
+  return out;
+}
+
+async function readSheet(xlsx) {
+  const files = await unzip(xlsx, n => n === 'xl/sharedStrings.xml' || n === 'xl/worksheets/sheet1.xml');
+  const xml = n => new DOMParser().parseFromString(new TextDecoder().decode(files.get(n)), 'application/xml');
+  const shared = [...xml('xl/sharedStrings.xml').getElementsByTagName('si')].map(si => si.textContent);
+  const rows = [];
+  for (const row of xml('xl/worksheets/sheet1.xml').getElementsByTagName('row')) {
+    const r = {};
+    for (const c of row.getElementsByTagName('c')) {
+      const v = c.getElementsByTagName('v')[0];
+      const text = c.getAttribute('t') === 's' ? shared[Number(v.textContent)] : c.textContent;
+      r[c.getAttribute('r').replace(/\d+/g, '')] = text;
+    }
+    rows.push(r);
+  }
+  return rows.slice(1);
+}
+
+async function loadDict() {
+  const e = document.getElementById('data-dict-zip');
+  const bytes = e
+    ? Uint8Array.from(atob(e.textContent.trim()), c => c.charCodeAt(0))
+    : new Uint8Array(await (await fetch(DICT_ZIP).then(r => { if (!r.ok) throw new Error(r.status); return r; })).arrayBuffer());
+  const outer = await unzip(bytes, n => n.endsWith('.xlsx'));
+  return buildDict(await readSheet([...outer.values()][0]));
+}
+
+async function getJSON(id, url) {
+  const e = document.getElementById(id);
+  if (e) return JSON.parse(e.textContent);
+  if (OFFLINE) return {};
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+const shardData = new Map();
+const shardPending = new Map();
+let strokeFailed = false;
+let strokeWait = null;
+const pathCache = new Map();
+
+function strokeOf(ch) {
+  const d = shardData.get(ch.codePointAt(0) % SHARDS);
+  return d ? (d[ch] || null) : undefined;
+}
+
+function loadStrokes(chars) {
+  const ids = [...new Set(chars.map(c => c.codePointAt(0) % SHARDS))].filter(i => !shardData.has(i));
+  return Promise.all(ids.map(i => {
+    if (!shardPending.has(i)) {
+      shardPending.set(i, getJSON('data-s' + i, `strokes/s${i}.json`)
+        .then(j => { shardData.set(i, j); })
+        .catch(() => { shardData.set(i, {}); strokeFailed = true; }));
+    }
+    return shardPending.get(i);
+  }));
+}
+
+function path(d) {
+  let p = pathCache.get(d);
+  if (!p) { p = new Path2D(d); pathCache.set(d, p); }
+  return p;
+}
+
+function drawStrokes(ctx, strokes, x, y, size, upto, ink, curInk) {
+  const pad = size * (1 - GLYPH) / 2;
+  const k = size * GLYPH / 1024;
+  ctx.save();
+  ctx.translate(x + pad, y + pad);
+  ctx.scale(k, k);
+  for (let i = 0; i < upto; i++) {
+    ctx.fillStyle = curInk && i === upto - 1 ? curInk : ink;
+    ctx.fill(path(strokes[i][0]));
+  }
+  ctx.restore();
+}
+
+function drawOrder(ctx, strokes, x, y, size) {
+  const pad = size * (1 - GLYPH) / 2;
+  const k = size * GLYPH / 1024;
+  const fs = Math.max(size * 0.11, 1.8);
+  ctx.font = `700 ${fs}px ${NUM_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  const placed = [];
+  strokes.forEach(([, sx, sy], i) => {
+    let px = x + pad + sx * k - fs * 0.35;
+    const py = y + pad + sy * k - fs * 0.35;
+    for (let t = 0; t < 4 && placed.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < fs * 0.85); t++) px += fs * 0.85;
+    placed.push([px, py]);
+    ctx.lineWidth = fs * 0.32;
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeText(String(i + 1), px, py);
+    ctx.fillStyle = ORDER_INK;
+    ctx.fillText(String(i + 1), px, py);
+  });
+}
+
+// #logic-start
+const HAN = /[㐀-鿿豈-﫿]/;
+const ZY = /[ㄅ-ㄯㆠ-ㆿˊˇˋ˙ˉ]/;
+const TONES = 'ˊˇˋ';
+
+function normZy(zy) {
+  const s = [...zy.replace(/ˉ/g, '')];
+  const tone = s.find(c => TONES.includes(c)) || '';
+  const base = s.filter(c => !TONES.includes(c) && c !== '˙').join('');
+  return base ? (s.includes('˙') ? '˙' : '') + base + tone : '';
+}
+
+function parse(text) {
+  const items = [];
+  let cur = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (HAN.test(ch)) { cur = { ch, pos: i, typed: '', zs: i + 1, ze: i + 1 }; items.push(cur); }
+    else if (ZY.test(ch) && cur) { if (!cur.typed) cur.zs = i; cur.typed += ch; cur.ze = i + 1; }
+  }
+  return items;
+}
+
+function dictTokens(text) {
+  return (text || '').split('&&').filter(Boolean).map(seg =>
+    HAN.test(seg[0]) && /[ㄅ-ㄯ˙]/.test(seg[1] || '') ? [seg[0], normZy(seg.slice(1))] : [null, seg]);
+}
+
+function buildDict(rows) {
+  const readings = new Map();
+  const freq = new Map();
+  const bigram = new Map();
+  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  for (const { A: ch, E: rawZy, F: expl } of rows) {
+    if (!ch || !rawZy) continue;
+    const zy = normZy(rawZy);
+    const seq = dictTokens(expl);
+    const plain = seq.map(([c, seg]) => c || seg).join('');
+    const examples = [];
+    for (const m of plain.matchAll(/「(.*?)」/g)) {
+      const q = m[1].replace(/^[。，！？、 ]+|[。，！？、 ]+$/g, '');
+      const n = [...q].length;
+      if (q.includes(ch) && n > 1 && n <= 6 && !examples.includes(q)) examples.push(q);
+      if (examples.length === 2) break;
+    }
+    if (!readings.has(ch)) readings.set(ch, new Map());
+    if (!readings.get(ch).has(zy)) readings.get(ch).set(zy, examples);
+    seq.forEach(([c, z], i) => {
+      if (!c) return;
+      bump(freq, c + z);
+      const next = seq[i + 1];
+      if (!next || !next[0]) return;
+      const word = c + next[0];
+      if (!bigram.has(word)) bigram.set(word, new Map());
+      bump(bigram.get(word), '0' + z);
+      bump(bigram.get(word), '1' + next[1]);
+    });
+  }
+
+  const ordered = new Map();
+  for (const [ch, r] of readings) {
+    const zs = [...r.keys()].sort((x, y) => (freq.get(ch + y) || 0) - (freq.get(ch + x) || 0));
+    ordered.set(ch, zs.map(zy => ({ zy, ex: r.get(zy).join('、') })));
+  }
+  const ctx = new Map();
+  for (const [word, cnt] of bigram) {
+    for (const pos of [0, 1]) {
+      const c = word[pos];
+      const rs = readings.get(c);
+      if (!rs || rs.size < 2) continue;
+      const votes = [...cnt].filter(([k]) => k[0] === String(pos) && rs.has(k.slice(1)))
+        .map(([k, n]) => [n, k.slice(1)]).sort((x, y) => y[0] - x[0]);
+      if (votes.length && (votes.length === 1 || votes[0][0] >= 2 * votes[1][0])) {
+        if (!ctx.has(c)) ctx.set(c, new Map());
+        ctx.get(c).set(word, votes[0][1]);
+      }
+    }
+  }
+  return {
+    readings: ch => ordered.get(ch) || null,
+    ctxReading: (ch, word) => ctx.get(ch)?.get(word) || null,
+  };
+}
+
+function resolve(items, dict) {
+  return items.map((it, i) => {
+    const typed = normZy(it.typed);
+    const base = { ...it, typedNorm: typed, readings: null, use: typed, status: 'none', note: '', suggest: '' };
+    if (!dict) return base;
+    const rs = dict.readings(it.ch);
+    if (!rs) return { ...base, status: 'bad', note: '《國語小字典》查無此字，可能是簡體字、異體字或錯字。' };
+    base.readings = rs;
+    if (typed && rs.some(r => r.zy === typed)) return { ...base, status: 'ok', note: '注音與字典相符。' };
+
+    let pick = null, word = '';
+    if (rs.length > 1) {
+      const next = items[i + 1], prev = items[i - 1];
+      const words = [];
+      if (next && next.pos === it.pos + 1) words.push(it.ch + next.ch);
+      if (prev && prev.pos === it.pos - 1) words.push(prev.ch + it.ch);
+      for (const w of words) { pick = dict.ctxReading(it.ch, w); if (pick) { word = w; break; } }
+    }
+    const suggest = pick || rs[0].zy;
+    const why = pick ? `依詞語「${word}」判讀為 ${suggest}` : `先用最常見的讀音 ${suggest}`;
+
+    if (typed) return { ...base, status: 'mis', suggest, note: `你輸入的「${typed}」不是字典裡的讀音。建議：${suggest}。` };
+    if (rs.length === 1) return { ...base, status: 'ok', use: suggest, note: '只有一個讀音，已自動帶入。' };
+    if (pick) return { ...base, status: 'ok', use: suggest, note: `多音字，${why}。` };
+    return { ...base, status: 'poly', use: suggest, suggest, note: `多音字，單獨一個字無法判斷，${why}。請確認是不是這個讀音。` };
+  });
+}
+
+function writeZy(text, item, zy) {
+  return text.slice(0, item.zs) + zy + text.slice(item.ze);
+}
+// #logic-end
+
+let DICT = null;
+let dictState = 'loading';
+let resolved = [];
+let selected = -1;
+
+function readOpts() {
+  return {
+    text: $('chars').value,
+    title: $('title').value.trim(),
+    vertical: $('dir-v').checked,
+    cell: Number($('size').value),
+    trace: Math.max(0, Math.min(12, Number($('trace').value) || 0)),
+    traceMode: document.querySelector('input[name="tmode"]:checked').value,
+    repeat: Number($('repeat').value),
+    stroke: document.querySelector('input[name="stroke"]:checked').value,
+    zhuyin: $('zhuyin').checked,
+    color: document.querySelector('input[name="color"]:checked').value,
+  };
+}
+
+function plan(o, items) {
+  const strip = o.zhuyin ? o.cell * 0.34 : 0;
+  const unitW = o.cell + strip;
+  const areaW = PAGE.w - PAGE.m * 2;
+  const areaH = PAGE.h - PAGE.m * 2 - PAGE.head - PAGE.foot;
+  const g = { strip, unitW, b: 0, dH: 0, laneH: o.cell };
+  const grid = o.stroke === 'grid' || o.stroke === 'both';
+  const maxS = grid ? Math.max(0, ...items.map(r => strokeOf(r.ch)?.length || 0)) : 0;
+  if (o.vertical) {
+    if (maxS) { g.b = unitW / 3; g.dH = Math.ceil(maxS / 3) * g.b + 2; }
+    g.lanes = Math.floor(areaW / unitW);
+    g.len = Math.max(1, Math.floor((areaH - g.dH) / o.cell));
+    g.gw = g.lanes * unitW;
+    g.gh = g.dH + g.len * o.cell;
+  } else {
+    g.len = Math.floor(areaW / unitW);
+    g.gw = g.len * unitW;
+    if (maxS) { g.b = Math.min(o.cell * 0.42, g.gw / maxS); g.laneH = o.cell + g.b + 1.5; }
+    g.lanes = Math.floor(areaH / g.laneH);
+    g.gh = g.lanes * g.laneH;
+  }
+  g.x0 = PAGE.m + (areaW - g.gw) / 2;
+  g.y0 = PAGE.m + PAGE.head + (areaH - g.gh) / 2;
+
+  const lanes = [];
+  for (const item of items) for (let r = 0; r < o.repeat; r++) lanes.push({ item, model: r === 0 });
+  const pages = [];
+  for (let i = 0; i < lanes.length; i += g.lanes) pages.push(lanes.slice(i, i + g.lanes));
+  if (!pages.length) pages.push([]);
+  g.pages = pages;
+  g.count = items.length;
+  return g;
+}
+
+function unitPos(o, g, lane, k) {
+  if (o.vertical) return { x: g.x0 + g.gw - (lane + 1) * g.unitW, y: g.y0 + g.dH + k * o.cell };
+  return { x: g.x0 + k * g.unitW, y: g.y0 + lane * g.laneH + g.laneH - o.cell };
+}
+
+function stepPos(o, g, lane, i) {
+  if (o.vertical) return { x: g.x0 + g.gw - (lane + 1) * g.unitW + (i % 3) * g.b, y: g.y0 + Math.floor(i / 3) * g.b };
+  return { x: g.x0 + i * g.b, y: g.y0 + lane * g.laneH };
+}
+
+function drawUnit(ctx, x, y, c, strip, color) {
+  ctx.strokeStyle = color;
+  ctx.setLineDash([]);
+  ctx.lineWidth = 0.3;
+  ctx.strokeRect(x, y, c, c);
+  if (strip) ctx.strokeRect(x + c, y, strip, c);
+  ctx.lineWidth = 0.16;
+  ctx.setLineDash([1.1, 0.9]);
+  ctx.beginPath();
+  ctx.moveTo(x + c / 2, y); ctx.lineTo(x + c / 2, y + c);
+  ctx.moveTo(x, y + c / 2); ctx.lineTo(x + c, y + c / 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawChar(ctx, ch, x, y, c, ink) {
+  ctx.font = `${c * 0.8}px ${KAI}`;
+  ctx.fillStyle = ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const ref = ctx.measureText('國');
+  const off = (ref.actualBoundingBoxAscent - ref.actualBoundingBoxDescent) / 2;
+  ctx.fillText(ch, x + c / 2, y + c / 2 + off);
+}
+
+function drawZhuyin(ctx, zy, x, y, c, strip, ink) {
+  let light = false, tone = '';
+  const syms = [];
+  for (const z of zy) {
+    if (z === '˙') light = true;
+    else if (TONES.includes(z)) tone = z;
+    else syms.push(z);
+  }
+  if (!syms.length) return;
+  const n = syms.length + (light ? 0.7 : 0);
+  const fs = Math.min(strip * 0.6, (c * 0.86) / n);
+  const cx = x + c + strip * (tone ? 0.4 : 0.5);
+  const top = y + c / 2 - (n * fs) / 2 + (light ? 0.7 * fs : 0) + fs / 2;
+  ctx.fillStyle = ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `${fs}px ${KAI}`;
+  syms.forEach((z, i) => ctx.fillText(z, cx, top + i * fs));
+  if (light) ctx.fillText('˙', cx, top - fs * 0.75);
+  if (tone) {
+    ctx.font = `${fs * 0.85}px ${KAI}`;
+    const ty = syms.length > 1 ? top + (syms.length - 1.5) * fs : top - fs * 0.25;
+    ctx.fillText(tone, x + c + strip * 0.82, ty);
+  }
+}
+
+function drawHeader(ctx, o, pageNo, total) {
+  ctx.fillStyle = MODEL_INK;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.font = `700 7.5px ${KAI}`;
+  ctx.fillText(o.title || '生字練習', PAGE.m, PAGE.m + 7);
+
+  ctx.font = `4.2px ${KAI}`;
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 0.2;
+  const y = PAGE.m + 17;
+  const fields = [['姓名', PAGE.m, 76], ['日期', 86, 136], ['家長簽名', 146, PAGE.w - PAGE.m]];
+  for (const [label, x1, x2] of fields) {
+    ctx.fillText(label, x1, y);
+    const lx = x1 + ctx.measureText(label).width + 2;
+    ctx.beginPath(); ctx.moveTo(lx, y + 0.8); ctx.lineTo(x2, y + 0.8); ctx.stroke();
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#666';
+  ctx.font = `3.4px ${KAI}`;
+  ctx.fillText(`第 ${pageNo} / ${total} 頁`, PAGE.w / 2, PAGE.h - PAGE.m + 2);
+}
+
+function traceLimit(o, g) {
+  if (o.traceMode === 'all') return g.len - 1;
+  if (o.traceMode === 'half') return Math.ceil(g.len / 2) - 1;
+  return o.trace;
+}
+
+function drawPage(ctx, o, g, pageIdx, s) {
+  ctx.save();
+  ctx.scale(s, s);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, PAGE.w, PAGE.h);
+  drawHeader(ctx, o, pageIdx + 1, g.pages.length);
+
+  const color = GRID_COLORS[o.color];
+  const lanes = g.pages[pageIdx];
+  const limit = traceLimit(o, g);
+  const numbers = o.stroke === 'num' || o.stroke === 'both';
+  for (let lane = 0; lane < g.lanes; lane++) {
+    const entry = lanes[lane];
+    const strokes = entry && entry.model ? strokeOf(entry.item.ch) : null;
+    for (let k = 0; k < g.len; k++) {
+      const { x, y } = unitPos(o, g, lane, k);
+      drawUnit(ctx, x, y, o.cell, g.strip, color);
+      if (!entry || !entry.model || k > limit) continue;
+      const ink = k === 0 ? MODEL_INK : TRACE_INK;
+      if (strokes) drawStrokes(ctx, strokes, x, y, o.cell, strokes.length, ink);
+      else drawChar(ctx, entry.item.ch, x, y, o.cell, ink);
+      if (k === 0 && strokes && numbers) drawOrder(ctx, strokes, x, y, o.cell);
+      if (g.strip && entry.item.use) drawZhuyin(ctx, entry.item.use, x, y, o.cell, g.strip, ink);
+    }
+    if (g.b && strokes) {
+      strokes.forEach((_, i) => {
+        const p = stepPos(o, g, lane, i);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 0.2;
+        ctx.strokeRect(p.x, p.y, g.b, g.b);
+        drawStrokes(ctx, strokes, p.x, p.y, g.b, i + 1, DONE_INK, MODEL_INK);
+      });
+    }
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.6;
+  if (o.vertical) ctx.strokeRect(g.x0, g.y0 + g.dH, g.gw, g.len * o.cell);
+  else for (let lane = 0; lane < g.lanes; lane++) ctx.strokeRect(g.x0, g.y0 + lane * g.laneH + g.laneH - o.cell, g.gw, o.cell);
+  ctx.restore();
+}
+
+const TMODE_HINT = {
+  custom: '第一格範字，後面依格數描紅，其餘空白。',
+  half: '前半段是範字加描紅，後半段只有田字格。',
+  all: '整行都有字，第一格範字，其餘全部描紅。',
+};
+const STROKE_HINT = {
+  none: '範字照教育部標準字形畫，不標筆順。',
+  num: '範字每一筆的起筆處標紅色序號。',
+  grid: '每個字上方加一排小格，一筆一筆加上去，新加的一筆是黑色。',
+  both: '範字標紅色序號，上方再加筆順分解格。',
+};
+const STATUS = {
+  ok: { cls: 's-ok', label: '讀音已確認', mark: '' },
+  poly: { cls: 's-poly', label: '多音字', mark: '?' },
+  mis: { cls: 's-mis', label: '注音與字典不符', mark: '!' },
+  bad: { cls: 's-bad', label: '字典查無此字', mark: '×' },
+  none: { cls: '', label: '', mark: '' },
+};
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function renderCheck() {
+  const host = $('zchips');
+  host.replaceChildren();
+  if (selected >= resolved.length) selected = -1;
+  resolved.forEach((r, i) => {
+    const st = STATUS[r.status];
+    const b = el('button', 'zc ' + st.cls);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(i === selected));
+    b.title = st.label;
+    b.append(el('b', '', r.ch), el('small', '', r.use || '—'));
+    if (st.mark) b.append(el('i', '', st.mark));
+    b.addEventListener('click', () => { selected = selected === i ? -1 : i; renderCheck(); });
+    host.append(b);
+  });
+
+  const fixable = resolved.filter(r => r.status === 'poly' || r.status === 'mis');
+  $('apply-all').hidden = !fixable.length;
+  $('apply-all').textContent = `全部採用建議讀音（${fixable.length}）`;
+
+  const msg = $('dict-msg');
+  if (dictState === 'loading') msg.textContent = '字典載入中…';
+  else if (dictState === 'failed') msg.textContent = '字典沒有載入，目前不會校對注音，只使用你輸入的注音。請重新整理頁面再試。';
+  else if (!resolved.length) msg.textContent = '輸入生字後，這裡會列出每個字的注音校對結果。';
+  else msg.textContent = '點一下字可以看讀音和例詞，並改用其他讀音。';
+
+  renderDetail();
+}
+
+function renderDetail() {
+  const box = $('detail');
+  const r = resolved[selected];
+  if (!r || r.status === 'none') { box.hidden = true; return; }
+  const st = STATUS[r.status];
+  box.className = 'detail ' + st.cls;
+  box.hidden = false;
+  const head = el('div', 'detail-head');
+  head.append(el('b', '', r.ch), el('strong', '', st.label));
+  const st2 = strokeOf(r.ch);
+  const strokeNote = st2 ? `筆順：共 ${st2.length} 畫。` : st2 === null ? '沒有筆順資料，範字改用字型顯示，不標筆順。' : '筆順資料載入中…';
+  const parts = [head, el('p', '', r.note), el('p', '', strokeNote)];
+
+  if (r.readings) {
+    const list = el('div', 'readings');
+    for (const rd of r.readings) {
+      const b = el('button', 'rd' + (rd.zy === r.use ? ' on' : ''));
+      b.type = 'button';
+      b.append(el('span', '', rd.zy), el('span', '', rd.ex ? '例：' + rd.ex : ''));
+      b.addEventListener('click', () => applyZy(selected, rd.zy));
+      list.append(b);
+    }
+    parts.push(list);
+  }
+  const a = el('a', '', `到教育部《國語辭典簡編本》查「${r.ch}」`);
+  a.href = LOOKUP_URL + encodeURIComponent(r.ch);
+  a.target = '_blank';
+  a.rel = 'noopener';
+  const p = el('p');
+  p.append(a);
+  parts.push(p);
+  box.replaceChildren(...parts);
+}
+
+function setText(text) {
+  $('chars').value = text;
+  schedule();
+}
+
+function applyZy(idx, zy) {
+  const it = parse($('chars').value)[idx];
+  if (!it) return;
+  setText(writeZy($('chars').value, it, zy));
+}
+
+function applyAll() {
+  let text = $('chars').value;
+  const items = parse(text);
+  for (let i = resolved.length - 1; i >= 0; i--) {
+    const r = resolved[i];
+    if ((r.status === 'poly' || r.status === 'mis') && items[i]) text = writeZy(text, items[i], r.suggest);
+  }
+  setText(text);
+}
+
+function renderPreview() {
+  const o = readOpts();
+  resolved = resolve(parse(o.text), DICT);
+  if (!strokeWait && resolved.some(r => strokeOf(r.ch) === undefined)) {
+    strokeWait = loadStrokes(resolved.map(r => r.ch)).finally(() => { strokeWait = null; renderPreview(); });
+  }
+  const g = plan(o, resolved);
+  $('trace-field').hidden = o.traceMode !== 'custom';
+  $('tmode-hint').textContent = TMODE_HINT[o.traceMode];
+  $('stroke-hint').textContent = strokeFailed ? '部分筆順資料沒有載入，那些字改用字型顯示。請重新整理頁面再試。' : STROKE_HINT[o.stroke];
+  renderCheck();
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const s = 3.4 * dpr;
+  const host = $('pages');
+  host.replaceChildren();
+  g.pages.forEach((_, i) => {
+    const wrap = el('div', 'sheet');
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(PAGE.w * s);
+    cv.height = Math.round(PAGE.h * s);
+    cv.setAttribute('aria-label', `練習簿第 ${i + 1} 頁預覽`);
+    drawPage(cv.getContext('2d'), o, g, i, s);
+    wrap.append(cv, el('span', '', `第 ${i + 1} 頁`));
+    host.append(wrap);
+  });
+
+  const per = o.vertical ? `每頁 ${g.lanes} 行 × ${g.len} 格` : `每頁 ${g.lanes} 列 × ${g.len} 格`;
+  const todo = resolved.filter(r => r.status !== 'ok' && r.status !== 'none').length;
+  const noStroke = resolved.filter(r => strokeOf(r.ch) === null).length;
+  const chips = g.count
+    ? [`${g.count} 個字`, `${g.pages.length} 頁`, per, ...(todo ? [`${todo} 個字待確認注音`] : []), ...(noStroke ? [`${noStroke} 個字沒有筆順資料`] : [])]
+    : ['尚未輸入生字，下方是空白練習頁', per];
+  $('status').replaceChildren(...chips.map(t => el('span', 'chip', t)));
+  $('tab-preview').textContent = `預覽（${g.pages.length} 頁）`;
+}
+
+async function ensureFonts() {
+  const o = readOpts();
+  const text = o.text + o.title + '國姓名日期家長簽名第頁生字練習ˊˇˋ˙' + resolved.map(r => r.use).join('');
+  try { await document.fonts.load(`40px "LXGW WenKai TC"`, text); } catch (e) {}
+}
+
+let timer = 0;
+function schedule() {
+  clearTimeout(timer);
+  timer = setTimeout(async () => { save(); renderPreview(); await ensureFonts(); renderPreview(); }, 120);
+}
+
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(readOpts())); } catch (e) {}
+}
+
+function restore() {
+  let o = null;
+  try { o = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+  $('chars').value = o?.text ?? SAMPLE;
+  if (!o) return;
+  $('title').value = o.title || '國語生字練習';
+  $(o.vertical ? 'dir-v' : 'dir-h').checked = true;
+  $('size').value = String(o.cell);
+  $('trace').value = o.trace;
+  const tm = $('t-' + (o.traceMode || 'custom')); if (tm) tm.checked = true;
+  $('repeat').value = String(o.repeat);
+  const sk = $('k-' + (o.stroke || 'both')); if (sk) sk.checked = true;
+  $('zhuyin').checked = o.zhuyin;
+  const c = $('c-' + o.color); if (c) c.checked = true;
+}
+
+const downloadsReady = window.claude?.use ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+const CAN_PRINT = window.self === window.top;
+
+function setMsg(text, isErr) {
+  $('dlmsg').textContent = text;
+  $('dlmsg').classList.toggle('err', !!isErr);
+}
+
+async function preparePages() {
+  await ensureFonts();
+  const o = readOpts();
+  const items = resolve(parse(o.text), DICT);
+  await loadStrokes(items.map(r => r.ch));
+  return { o, g: plan(o, items) };
+}
+
+function* pageCanvases(o, g) {
+  const s = 9;
+  const cv = document.createElement('canvas');
+  cv.width = PAGE.w * s;
+  cv.height = PAGE.h * s;
+  const ctx = cv.getContext('2d');
+  for (let i = 0; i < g.pages.length; i++) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawPage(ctx, o, g, i, s);
+    yield cv;
+  }
+}
+
+function saveBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+
+async function exportPdf() {
+  const btn = $('pdf');
+  btn.disabled = true;
+  setMsg('正在產生 PDF…');
+  try {
+    const downloads = await downloadsReady;
+    if (!downloads && window.claude) { setMsg('這個檢視無法下載檔案，請在 claude.ai 開啟這個頁面。', true); return; }
+    if (!window.jspdf) { setMsg('PDF 元件沒有載入，請重新整理頁面再試一次。', true); return; }
+    const { o, g } = await preparePages();
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    let first = true;
+    for (const cv of pageCanvases(o, g)) {
+      if (!first) doc.addPage();
+      first = false;
+      doc.addImage(cv.toDataURL('image/png'), 'PNG', 0, 0, PAGE.w, PAGE.h, undefined, 'FAST');
+    }
+    const name = (o.title || '生字練習').replace(/[\\/:*?"<>|]/g, '') + '.pdf';
+    const blob = doc.output('blob');
+    if (downloads) await downloads.save({ filename: name, data: blob });
+    else saveBlob(blob, name);
+    setMsg(`已下載 ${name}，列印時請選「實際大小」或縮放 100%。`);
+  } catch (e) {
+    if (e?.code === 'declined') setMsg('已取消下載。');
+    else if (e?.code === 'rate_limited') setMsg('下載視窗已經開著，請先處理那一個。', true);
+    else setMsg('產生 PDF 失敗：' + (e?.message || e), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function printPages() {
+  const btn = $('print');
+  btn.disabled = true;
+  setMsg('正在準備列印…');
+  try {
+    const { o, g } = await preparePages();
+    const imgs = [];
+    for (const cv of pageCanvases(o, g)) {
+      const img = new Image();
+      img.src = cv.toDataURL('image/png');
+      imgs.push(img);
+    }
+    await Promise.all(imgs.map(img => img.decode().catch(() => {})));
+    $('print-root').replaceChildren(...imgs);
+    setMsg('列印時請選 A4、邊界「無」、縮放 100%。');
+    window.print();
+  } catch (e) {
+    setMsg('準備列印失敗：' + (e?.message || e), true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+restore();
+document.querySelector('.panel').addEventListener('input', schedule);
+document.querySelector('.panel').addEventListener('change', schedule);
+$('pdf').addEventListener('click', exportPdf);
+$('print').hidden = !CAN_PRINT;
+$('print').addEventListener('click', printPages);
+$('apply-all').addEventListener('click', applyAll);
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-view]');
+  if (!b) return;
+  $('layout').dataset.view = b.dataset.view;
+  for (const t of $('tabs').querySelectorAll('button')) t.setAttribute('aria-pressed', String(t === b));
+  window.scrollTo({ top: 0 });
+});
+document.fonts?.addEventListener?.('loadingdone', () => renderPreview());
+renderPreview();
+$('notice').hidden = true;
+ensureFonts().then(renderPreview);
+
+loadDict()
+  .then(d => { DICT = d; dictState = 'ready'; })
+  .catch(() => { dictState = 'failed'; })
+  .finally(() => { renderPreview(); ensureFonts().then(renderPreview); });
+</script>
