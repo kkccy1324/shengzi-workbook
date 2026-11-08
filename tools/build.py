@@ -51,6 +51,19 @@ PWA_SCRIPT = '''<script>
   navigator.serviceWorker.ready.then(function () {
     msg.textContent = '已可離線使用。iPhone 請用 Safari 的「分享 → 加入主畫面」，之後從主畫面開啟。';
   });
+  // A new version took over while this (old) page is open: offer a reload instead of waiting for a second restart.
+  var hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) return;
+    var n = document.getElementById('notice'), b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn-line';
+    b.textContent = '更新';
+    b.onclick = function () { location.reload(); };
+    n.className = 'notice';
+    n.replaceChildren('有新版本可以使用，點「更新」換成新版（不會清除你輸入的生字）。 ', b);
+    n.hidden = false;
+  });
 })();
 </script>
 '''
@@ -115,7 +128,9 @@ def build_offline(title, body, font):
     body = body.replace(JSPDF_CDN, '\n'.join(data) + '\n<script>' + jspdf + '</script>')
     html = HEAD.format(title=title, extra='', font=font) + body + '</body>\n</html>\n'
     with zipfile.ZipFile(os.path.join(DOCS, 'shengzi-offline.zip'), 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('生字練習簿產生器-離線版.html', html)
+        # Fixed timestamp so the same source always builds the same zip (CI checks docs/ is up to date)
+        info = zipfile.ZipInfo('生字練習簿產生器-離線版.html', date_time=(2026, 1, 1, 0, 0, 0))
+        z.writestr(info, html, compress_type=zipfile.ZIP_DEFLATED)
 
 
 if __name__ == '__main__':
