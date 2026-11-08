@@ -146,7 +146,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 <div class="wrap">
   <header>
     <h1>生字練習簿產生器</h1>
-    <p>輸入這週的生字，注音會依教育部《國語小字典》自動帶入並校對，範字依教育部標準字體標出筆順，即時排出有十字虛線的田字格練習頁。確認後下載 A4 PDF 列印。</p>
+    <p>輸入這週的生字，注音會依教育部《國語小字典》自動帶入並校對，範字依教育部標準字形，即時排出有十字虛線的田字格練習頁。確認後下載 A4 PDF 列印。</p>
   </header>
 
   <p class="notice" id="notice">正在載入…如果這段文字一直沒有消失，代表目前的開啟方式沒有執行頁面程式（例如手機或 App 內的檔案預覽）。請把檔案存到電腦，用 Chrome、Edge 或 Safari 開啟。</p>
@@ -232,7 +232,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
         <p class="hint" id="tmode-hint"></p>
       </div>
 
-      <div class="field">
+      <div class="field" id="stroke-field" hidden>
         <span class="label">筆順</span>
         <div class="seg">
           <label><input type="radio" name="stroke" value="none" id="k-none">不顯示</label>
@@ -297,6 +297,8 @@ const DONE_INK = '#a6a6a6';
 const NUM_FONT = '"Noto Sans TC",Arial,sans-serif';
 const SHARDS = 200;
 const GLYPH = 0.86;
+// 筆順功能開關：false 時隱藏筆順設定，輸出不標序號、不加分解格（範字仍照標準字形畫）
+const STROKE_ORDER = false;
 
 const DICT_ZIP = 'data/dict_mini_2019_20260929.zip';
 const OFFLINE = !!document.getElementById('data-dict-zip');
@@ -555,7 +557,7 @@ function readOpts() {
     trace: Math.max(0, Math.min(12, Number($('trace').value) || 0)),
     traceMode: document.querySelector('input[name="tmode"]:checked').value,
     repeat: Number($('repeat').value),
-    stroke: document.querySelector('input[name="stroke"]:checked').value,
+    stroke: STROKE_ORDER ? document.querySelector('input[name="stroke"]:checked').value : 'none',
     zhuyin: $('zhuyin').checked,
     color: document.querySelector('input[name="color"]:checked').value,
   };
@@ -793,7 +795,7 @@ function renderDetail() {
   head.append(el('b', '', r.ch), el('strong', '', st.label));
   const st2 = strokeOf(r.ch);
   const strokeNote = st2 ? `筆順：共 ${st2.length} 畫。` : st2 === null ? '沒有筆順資料，範字改用字型顯示，不標筆順。' : '筆順資料載入中…';
-  const parts = [head, el('p', '', r.note), el('p', '', strokeNote)];
+  const parts = [head, el('p', '', r.note), ...(STROKE_ORDER ? [el('p', '', strokeNote)] : [])];
 
   if (r.readings) {
     const list = el('div', 'readings');
@@ -866,7 +868,7 @@ function renderPreview() {
 
   const per = o.vertical ? `每頁 ${g.lanes} 行 × ${g.len} 格` : `每頁 ${g.lanes} 列 × ${g.len} 格`;
   const todo = resolved.filter(r => r.status !== 'ok' && r.status !== 'none').length;
-  const noStroke = resolved.filter(r => strokeOf(r.ch) === null).length;
+  const noStroke = STROKE_ORDER ? resolved.filter(r => strokeOf(r.ch) === null).length : 0;
   const chips = g.count
     ? [`${g.count} 個字`, `${g.pages.length} 頁`, per, ...(todo ? [`${todo} 個字待確認注音`] : []), ...(noStroke ? [`${noStroke} 個字沒有筆順資料`] : [])]
     : ['尚未輸入生字，下方是空白練習頁', per];
@@ -887,7 +889,9 @@ function schedule() {
 }
 
 function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(readOpts())); } catch (e) {}
+  // 筆順關閉時仍存使用者原本的選擇，日後開啟不會被重設成「不顯示」
+  const stroke = document.querySelector('input[name="stroke"]:checked').value;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ ...readOpts(), stroke })); } catch (e) {}
 }
 
 function restore() {
@@ -1003,6 +1007,7 @@ document.querySelector('.panel').addEventListener('input', schedule);
 document.querySelector('.panel').addEventListener('change', schedule);
 $('pdf').addEventListener('click', exportPdf);
 $('print').hidden = !CAN_PRINT;
+$('stroke-field').hidden = !STROKE_ORDER;
 $('print').addEventListener('click', printPages);
 $('apply-all').addEventListener('click', applyAll);
 $('tabs').addEventListener('click', e => {
