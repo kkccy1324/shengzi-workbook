@@ -29,6 +29,7 @@ src/zhuyin-font.css     霞鶩文楷 TC 子集（注音符號＋頁首固定字�
 tools/data.py           產生 docs/strokes/ 與 src/zhuyin-font.css（需 npm）
 tools/build.py          由 src/ 組出 docs/index.html、docs/sw.js、docs/shengzi-offline.zip
 tools/check.py          端到端測試：網站連線、網站斷網（service worker）、單一檔離線版
+.github/workflows/check.yml  每次 push／PR 自動組建、確認 docs/ 與 src/ 同步、跑 check.py
 docs/data/              教育部《國語小字典》原始壓縮檔，不可修改
 docs/strokes/s*.json    筆順資料，依字碼 % 200 分成 200 個檔
 docs/vendor/            jsPDF 2.5.1（本地副本，不用 CDN）
@@ -50,7 +51,8 @@ python3 tools/check.py      # 3. 三項測試都要 [OK]（需要 Chrome；路�
 只有更新筆順或字型時才需要先跑 `python3 tools/data.py`。
 
 - commit 作者使用 `kkccy1324 <kkccy1324@users.noreply.github.com>`，不要使用使用者的真實信箱。
-- 每次 build 都會依檔案內容產生新的 service worker 快取版本，已安裝的使用者重新開啟兩次就會換成新版。
+- 每次 build 都會依檔案內容產生新的 service worker 快取版本。已開啟的頁面偵測到新版時，頁首會出現「更新」按鈕（邏輯在 `tools/build.py` 的 `PWA_SCRIPT`）。
+- build 結果是固定的（離線版 zip 用固定時間戳），同一份原始碼重跑不會產生差異。忘了重新 build 就 push，CI 會失敗。
 
 ## 關鍵設計決策（不要在沒討論的情況下推翻）
 
@@ -76,7 +78,7 @@ python3 tools/check.py      # 3. 三項測試都要 [OK]（需要 Chrome；路�
 
 ## 目前狀態與待辦
 
-- [ ] **GitHub Pages 尚未確認開啟**：需要使用者在 Settings → Pages 選 `main` + `/docs`。session 的 GitHub 代理不允許 Pages API。
+- [x] repo 為 public，GitHub Pages 已開啟（2026-11-08 由 GitHub API `has_pages: true` 確認；沙箱連不到 github.io，網站內容未實際開啟驗證）。
 - [ ] **iPhone 實測未做**：加入主畫面後「下載 PDF」與「直接列印」是否可用。若不行，考慮改成開啟 PDF 預覽，再用分享選單列印。
 - [ ] **筆畫多的字序號擁擠**：例如「學」16 畫配 20 mm 格。曾提議筆畫超過約 12 畫時自動放大範字格，使用者尚未決定。
 - [ ] claude.ai 上有一份舊的 artifact 版本（字典仍用轉換後的 JSON），以 GitHub 網站為主。使用者尚未決定是否同步或刪除。

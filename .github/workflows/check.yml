@@ -1,0 +1,37 @@
+# Every push / PR: rebuild docs/ from src/, make sure the committed docs/ is up to date, then run the end-to-end checks.
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install playwright
+
+      - name: Build
+        run: python3 tools/build.py
+
+      - name: docs/ matches src/ (run tools/build.py and commit if this fails)
+        run: |
+          git diff --stat --exit-code -- docs ':(exclude)docs/shengzi-offline.zip'
+          # Compare the zip by content: compressed bytes can differ between zlib versions.
+          python3 - <<'PY'
+          import io, subprocess, zipfile
+          def files(z):
+              return {n: z.read(n) for n in z.namelist()}
+          old = zipfile.ZipFile(io.BytesIO(subprocess.check_output(['git', 'show', 'HEAD:docs/shengzi-offline.zip'])))
+          new = zipfile.ZipFile('docs/shengzi-offline.zip')
+          assert files(old) == files(new), 'docs/shengzi-offline.zip is out of date'
+          PY
+
+      - name: End-to-end checks
+        run: python3 tools/check.py
+        env:
+          CHROME: /usr/bin/google-chrome
