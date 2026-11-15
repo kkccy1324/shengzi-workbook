@@ -5,7 +5,9 @@ Needs: openpyxl, fonttools, brotli, and npm (to fetch the stroke and font packag
 
 Outputs:
   docs/strokes/s*.json    stroke outlines from g0v zh-stroke-data, sharded by code point,
-                          for the characters in 教育部《國語小字典》 (docs/data/)
+                          for the characters in 教育部《國語小字典》 (docs/data/).
+                          Each stroke: [outline path, start x, start y, [x0, y0, x1, y1, …] track]
+                          in a 1024 × 1024 box; the track is the pen route used for animation and checking.
   src/zhuyin-font.css     LXGW WenKai TC subset for bopomofo and fixed header text
 """
 import base64, glob, io, json, os, re, subprocess, tarfile, tempfile, zipfile
@@ -57,8 +59,8 @@ def build_strokes(chars, tmp):
                         d.append('Q' + pt(p['begin']) + ' ' + pt(p['end']))
                     elif t == 'C':
                         d.append('C' + pt(p['begin']) + ' ' + pt(p['mid']) + ' ' + pt(p['end']))
-                start = s['track'][0]
-                strokes.append([''.join(d) + 'Z', round(start['x'] / 2), round(start['y'] / 2)])
+                track = [round(v / 2) for p in s['track'] for v in (p['x'], p['y'])]
+                strokes.append([''.join(d) + 'Z', track[0], track[1], track])
             cp = int(hit.group(1), 16)
             shards[cp % SHARDS][chr(cp)] = strokes
     out = os.path.join(ROOT, 'docs', 'strokes')
