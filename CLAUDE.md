@@ -30,7 +30,7 @@ tools/data.py           產生 docs/strokes/ 與 src/zhuyin-font.css（需 npm�
 tools/build.py          由 src/ 組出 docs/index.html、docs/sw.js、docs/shengzi-offline.zip
 tools/check.py          端到端測試：網站連線、網站斷網（service worker）、單一檔離線版
 docs/data/              教育部《國語小字典》原始壓縮檔，不可修改
-docs/strokes/s*.json    筆順資料，依字碼 % 200 分成 200 個檔
+docs/strokes/s*.json    筆順資料，依字碼 % 200 分成 200 個檔。每筆 [外框路徑, 起筆x, 起筆y, [運筆路線 x0,y0,x1,y1…]]，1024 方框座標
 docs/vendor/            jsPDF 2.5.1（本地副本，不用 CDN）
 docs/icons/, docs/manifest.webmanifest   PWA 圖示與設定
 ```
@@ -60,6 +60,9 @@ python3 tools/check.py      # 3. 三項測試都要 [OK]（需要 Chrome；路�
 4. **範字用筆順外框繪製，不用字型**：讓筆順序號和字形對齊，同時符合教育部標準字形。沒有筆順資料的字（《國語小字典》4,311 字中有 260 個罕用字）才用字型。
 5. **筆順呈現四選一**：不顯示／標序號／分解格／兩者（預設兩者）。分解格高度依「這次輸入中筆畫最多的字」決定。
    - 整個筆順功能由 `src/shengzi.html` 的 `STROKE_ORDER` 常數開關。目前為 `false`（使用者要求先關閉，筆順改好後再開）：隱藏筆順設定、輸出不標序號也不加分解格，範字仍用筆順外框畫。改成 `true` 後重新 build 即上線。
+   - **筆順動畫與練習**（`STROKE_PRACTICE` 開關，目前 `true`）與 `STROKE_ORDER` 各自獨立（使用者要求），但共用同一份筆順資料。入口在注音校對的字詳細資訊裡，開一個 `<dialog>`。
+     判斷方式：孩子寫完一筆，把筆跡和每一筆的運筆路線都重新取樣成 24 點比平均距離，最像的那一筆若是該寫的那一筆、距離 < `PR_TOL`(140／1024) 且方向正確才算對；否則依最像的是哪一筆給出「順序不對／已經寫過／方向反了／位置不對」。
+     以全部 4,051 字的運筆路線實測：照路線寫 100% 判對；加上平移與抖動約 0.05% 誤判；把下一筆當成這一筆寫，0 次被誤判為對。
 6. **PDF**：把每頁畫在 9 px/mm 的 canvas 上，再用 jsPDF 轉成 PDF。不在 PDF 裡內嵌中文字型。
 7. **一份原始碼產出三種版本**：claude.ai 版（使用 `downloads` 能力下載）、GitHub Pages PWA、單一檔離線版（所有資料內嵌在 `<script type="application/json">` 和 base64 的原始 zip）。頁面用 `OFFLINE`（有沒有內嵌資料）和 `CAN_PRINT`（不在 iframe 裡）判斷執行環境。
 8. **手機版面**：寬度小於 900px 時用「設定／預覽」切換分頁。早期使用者回報「看不到預覽」，原因是預覽排在很長的設定面板下方。
@@ -92,3 +95,4 @@ python3 tools/check.py      # 3. 三項測試都要 [OK]（需要 Chrome；路�
 6. 手機「設定／預覽」切換分頁、載入失敗與錯誤的診斷訊息
 7. 為了讓 iPhone 也能離線，改成 GitHub Pages PWA
 8. 字典改為瀏覽器直接讀取教育部原始檔（授權考量）
+9. 筆順動畫與互動練習（筆順資料加入完整運筆路線）

@@ -170,6 +170,27 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .sheet { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 6px; }
 .sheet canvas { width: 100%; height: auto; display: block; background: #ffffff; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.12), 0 6px 18px rgba(0,0,0,0.08); }
 .sheet span { font-size: 12px; color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* 筆順動畫與練習視窗：格子固定白底（像紙），手機上幾乎滿版 */
+dialog.practice { border: 0; border-radius: 12px; padding: 14px 16px 16px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 20px)); max-height: calc(100dvh - 20px); overflow-y: auto; }
+dialog.practice::backdrop { background: rgba(0, 0, 0, 0.45); }
+.pr-head { display: flex; align-items: center; gap: 10px; }
+.pr-head b { font-family: var(--font-display); font-size: 32px; font-weight: 400; line-height: 1; }
+.pr-head span { flex: 1; color: var(--muted); font-size: 14px; }
+.pr-close { font: inherit; font-size: 26px; line-height: 1; width: 40px; height: 40px; color: var(--muted); background: transparent; border: 0; cursor: pointer; }
+.pr-board { position: relative; width: 100%; max-width: 400px; aspect-ratio: 1; margin: 8px auto; }
+.pr-board canvas { display: block; width: 100%; height: 100%; background: #ffffff; border-radius: 6px; touch-action: none; cursor: crosshair; }
+.pr-done { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-bottom: 8px; padding: 8px 12px; text-align: center; background: var(--ok-soft); border-radius: 8px; }
+.pr-done .stars { font-size: 34px; line-height: 1.1; letter-spacing: 6px; color: #e8a317; animation: pr-pop 0.6s ease-out both; }
+.pr-done strong { font-family: var(--font-display); font-size: 24px; color: var(--ok); }
+.pr-done span { font-size: 14px; color: var(--muted); }
+@keyframes pr-pop { from { transform: scale(0.3); opacity: 0; } 70% { transform: scale(1.15); } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pr-done .stars { animation: none; } }
+.pr-msg { margin: 0 0 8px; min-height: 3.2em; font-size: 15px; text-align: center; }
+.pr-msg.err { color: var(--bad); font-weight: 700; }
+.pr-msg.ok { color: var(--ok); font-weight: 700; }
+.pr-actions { display: flex; gap: 8px; margin-top: 10px; }
+.pr-actions .btn { flex: 1; padding: 10px 6px; font-size: 14px; }
 </style>
 
 <div class="wrap">
@@ -310,6 +331,24 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 
 <div id="print-root"></div>
 
+<dialog class="practice" id="practice" aria-labelledby="pr-char">
+  <div class="pr-head">
+    <b id="pr-char"></b><span id="pr-info"></span>
+    <button class="pr-close" id="pr-close" type="button" aria-label="關閉">×</button>
+  </div>
+  <div class="pr-board">
+    <canvas id="pr-canvas" aria-label="筆順練習格：用手指或滑鼠依筆順一筆一筆寫"></canvas>
+  </div>
+  <div class="pr-done" id="pr-done" role="status" hidden><div class="stars" id="pr-stars"></div><strong id="pr-praise"></strong><span id="pr-sub"></span></div>
+  <p class="pr-msg" id="pr-msg" role="status" aria-live="polite"></p>
+  <label class="check"><input type="checkbox" id="pr-guide" checked>顯示淡色範字</label>
+  <div class="pr-actions">
+    <button class="btn btn-alt" id="pr-demo" type="button">看動畫</button>
+    <button class="btn btn-alt" id="pr-again" type="button">重新練習</button>
+    <button class="btn" id="pr-next" type="button">下一個字</button>
+  </div>
+</dialog>
+
 <script src="vendor/jspdf.umd.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
@@ -328,6 +367,8 @@ const SHARDS = 200;
 const GLYPH = 0.86;
 // 筆順功能開關：false 時隱藏筆順設定，輸出不標序號、不加分解格（範字仍照標準字形畫）
 const STROKE_ORDER = false;
+// 筆順動畫與練習開關：與 STROKE_ORDER 各自獨立，共用同一份筆順資料
+const STROKE_PRACTICE = true;
 
 const DICT_ZIP = 'data/dict_mini_2019_20260929.zip';
 const OFFLINE = !!document.getElementById('data-dict-zip');
@@ -808,7 +849,7 @@ function renderCheck() {
   if (dictState === 'loading') msg.textContent = '字典載入中…';
   else if (dictState === 'failed') msg.textContent = '字典沒有載入，目前不會校對注音，只使用你輸入的注音。請重新整理頁面再試。';
   else if (!resolved.length) msg.textContent = '輸入生字後，這裡會列出每個字的注音校對結果。';
-  else msg.textContent = '點一下字可以看讀音和例詞，並改用其他讀音。';
+  else msg.textContent = STROKE_PRACTICE ? '點一下字可以看讀音和例詞、改用其他讀音，也能看筆順動畫、練習筆順。' : '點一下字可以看讀音和例詞，並改用其他讀音。';
 
   renderDetail();
 }
@@ -824,7 +865,14 @@ function renderDetail() {
   head.append(el('b', '', r.ch), el('strong', '', st.label));
   const st2 = strokeOf(r.ch);
   const strokeNote = st2 ? `筆順：共 ${st2.length} 畫。` : st2 === null ? '沒有筆順資料，範字改用字型顯示，不標筆順。' : '筆順資料載入中…';
-  const parts = [head, el('p', '', r.note), ...(STROKE_ORDER ? [el('p', '', strokeNote)] : [])];
+  const parts = [head, el('p', '', r.note), ...(STROKE_ORDER || STROKE_PRACTICE ? [el('p', '', strokeNote)] : [])];
+  if (STROKE_PRACTICE && st2) {
+    const b = el('button', 'btn', '筆順動畫與練習');
+    b.type = 'button';
+    const i = selected;
+    b.addEventListener('click', () => openPractice(i));
+    parts.push(b);
+  }
 
   if (r.readings) {
     const list = el('div', 'readings');
@@ -1030,6 +1078,283 @@ async function printPages() {
     btn.disabled = false;
   }
 }
+
+// ---- 筆順動畫與練習 ----
+// 每一筆的資料是 [外框路徑, 起筆 x, 起筆 y, 運筆路線 [x0, y0, x1, y1, …]]，座標在 1024 × 1024 的方框裡。
+// 寫完一筆就和每一筆的運筆路線比對：最像的那一筆就是孩子寫的那一筆，再看它是不是該寫的那一筆。
+const PR_INK = { guide: '#e4e7e5', done: MODEL_INK, pen: '#4a4f52', wrong: '#d0342c', hint: '#2f62b5', demo: MODEL_INK };
+const PR_BRUSH = 150;      // 動畫筆刷寬度（1024 方框單位），只在該筆外框內上色
+const PR_TOL = 140;        // 平均偏離容許值：約為字寬的 14%，給小朋友寬鬆一點
+const PR_PRAISE = ['太厲害了！', '好棒的筆順！', '一次就寫對！', '寫得真好！'];
+const pr = { list: [], at: 0, strokes: null, idx: 0, mistakes: 0, pts: null, wrong: null, hint: -1, hintT: 0, demo: -1, demoT: 0, token: 0 };
+
+const trackOf = s => { const t = s[3] || [s[1], s[2]], pts = []; for (let i = 0; i < t.length; i += 2) pts.push([t[i], t[i + 1]]); return pts; };
+const lenOf = pts => pts.reduce((a, p, i) => i ? a + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0, 0);
+
+function resample(pts, n) {
+  const total = lenOf(pts);
+  if (pts.length < 2 || !total) return Array.from({ length: n }, () => pts[0]);
+  const out = [];
+  let seg = 1, acc = 0;
+  for (let k = 0; k < n; k++) {
+    const want = total * k / (n - 1);
+    while (seg < pts.length - 1 && acc + Math.hypot(pts[seg][0] - pts[seg - 1][0], pts[seg][1] - pts[seg - 1][1]) < want) {
+      acc += Math.hypot(pts[seg][0] - pts[seg - 1][0], pts[seg][1] - pts[seg - 1][1]);
+      seg++;
+    }
+    const a = pts[seg - 1], b = pts[seg], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, t = Math.min(1, (want - acc) / L);
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  return out;
+}
+
+const meanDist = (a, b) => a.reduce((s, p, i) => s + Math.hypot(p[0] - b[i][0], p[1] - b[i][1]), 0) / a.length;
+
+// 回傳 { ok, msg }：ok 表示寫對了該寫的那一筆
+function judgeStroke(strokes, idx, pts) {
+  const n = 24, user = resample(pts, n);
+  const scores = strokes.map(s => {
+    const t = resample(trackOf(s), n);
+    return { fwd: meanDist(user, t), rev: meanDist(user, t.slice().reverse()), len: lenOf(trackOf(s)) };
+  });
+  let best = 0;
+  scores.forEach((s, j) => { if (Math.min(s.fwd, s.rev) < Math.min(scores[best].fwd, scores[best].rev)) best = j; });
+  const b = scores[best], hit = Math.min(b.fwd, b.rev) < PR_TOL, want = idx + 1;
+  if (hit && best === idx) {
+    if (b.fwd <= b.rev || b.len < 100) return { ok: true };
+    return { ok: false, msg: `第 ${want} 畫的方向寫反了，要從藍點那一頭開始寫。` };
+  }
+  if (hit && best < idx) return { ok: false, msg: `這是第 ${best + 1} 畫，已經寫過了。現在要寫第 ${want} 畫，看藍色的地方。` };
+  if (hit) return { ok: false, msg: `這是第 ${best + 1} 畫，順序不對喔！要先寫第 ${want} 畫，看藍色的地方。` };
+  return { ok: false, msg: `位置不太對，第 ${want} 畫在藍色的地方，再寫一次。` };
+}
+
+function prBox() {
+  const cv = $('pr-canvas'), S = cv.width;
+  return { cv, S, pad: S * (1 - GLYPH) / 2, k: S * GLYPH / 1024 };
+}
+
+// 畫第 i 筆的前 t（0–1）部分：沿運筆路線刷一條粗線，只留在這一筆的外框內
+function prPartial(ctx, s, t, ink) {
+  if (t >= 1) { ctx.fillStyle = ink; ctx.fill(path(s[0])); return; }
+  const pts = trackOf(s), goal = lenOf(pts) * t;
+  ctx.save();
+  ctx.clip(path(s[0]));
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = PR_BRUSH;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(...pts[0]);
+  let acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const L = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (acc + L >= goal) {
+      const r = L ? (goal - acc) / L : 0;
+      ctx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * r, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * r);
+      break;
+    }
+    ctx.lineTo(...pts[i]);
+    acc += L;
+  }
+  if (goal <= 0) ctx.lineTo(pts[0][0] + 0.1, pts[0][1]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function prLine(ctx, pts, ink, width) {
+  if (!pts || !pts.length) return;
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(...pts[0]);
+  for (const p of pts.slice(1)) ctx.lineTo(...p);
+  if (pts.length === 1) ctx.lineTo(pts[0][0] + 0.1, pts[0][1]);
+  ctx.stroke();
+}
+
+function prRender() {
+  const { cv, S, pad, k } = prBox(), ctx = cv.getContext('2d'), strokes = pr.strokes;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, S, S);
+  const grid = GRID_COLORS[readOpts().color] || GRID_COLORS.green, u = S / 200;
+  ctx.strokeStyle = grid;
+  ctx.lineWidth = u * 1.2;
+  ctx.strokeRect(u, u, S - 2 * u, S - 2 * u);
+  ctx.lineWidth = u * 0.6;
+  ctx.setLineDash([u * 5, u * 4]);
+  ctx.beginPath();
+  ctx.moveTo(S / 2, 0); ctx.lineTo(S / 2, S); ctx.moveTo(0, S / 2); ctx.lineTo(S, S / 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (!strokes) return;
+
+  ctx.translate(pad, pad);
+  ctx.scale(k, k);
+  if ($('pr-guide').checked || pr.demo >= 0) { ctx.fillStyle = PR_INK.guide; strokes.forEach(s => ctx.fill(path(s[0]))); }
+  if (pr.demo >= 0) {
+    for (let i = 0; i < pr.demo; i++) prPartial(ctx, strokes[i], 1, PR_INK.demo);
+    if (pr.demo < strokes.length) prPartial(ctx, strokes[pr.demo], pr.demoT, PR_INK.demo);
+    return;
+  }
+  for (let i = 0; i < pr.idx; i++) prPartial(ctx, strokes[i], 1, PR_INK.done);
+  if (pr.hint >= 0) {
+    const s = strokes[pr.hint];
+    prPartial(ctx, s, pr.hintT, PR_INK.hint);
+    ctx.fillStyle = PR_INK.hint;
+    ctx.beginPath();
+    ctx.arc(...trackOf(s)[0], 34, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  prLine(ctx, pr.wrong, PR_INK.wrong, 44);
+  prLine(ctx, pr.pts, PR_INK.pen, 44);
+}
+
+// 依序跑動畫：每一筆的時間跟長度成正比；token 變了就停（換字、關閉、重新開始）
+function prAnimate(step) {
+  const token = ++pr.token;
+  return new Promise(resolve => {
+    let t0 = performance.now();
+    const tick = now => {
+      if (token !== pr.token) return resolve(false);
+      if (step(now - t0, () => { t0 = now; })) requestAnimationFrame(tick);
+      else resolve(true);
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+const prDuration = s => 300 + lenOf(trackOf(s)) * 0.7;
+
+async function prDemo() {
+  const strokes = pr.strokes;
+  Object.assign(pr, { demo: 0, demoT: 0, pts: null, wrong: null, hint: -1 });
+  $('pr-done').hidden = true;
+  prMsg(`筆順動畫：共 ${strokes.length} 畫，看清楚每一筆從哪裡開始。`);
+  const done = await prAnimate((ms, restart) => {
+    const d = prDuration(strokes[pr.demo]);
+    pr.demoT = Math.min(1, ms / d);
+    if (ms >= d + 250) { pr.demo++; pr.demoT = 0; restart(); }
+    prRender();
+    return pr.demo < strokes.length;
+  });
+  if (done) prStart('看完了，換你寫寫看！從第 1 畫開始。');
+}
+
+function prStart(msg) {
+  ++pr.token;
+  Object.assign(pr, { demo: -1, idx: 0, mistakes: 0, pts: null, wrong: null, hint: -1 });
+  $('pr-done').hidden = true;
+  prMsg(msg || '從第 1 畫開始寫。');
+  prRender();
+}
+
+function prShowHint(i) {
+  pr.hint = i;
+  pr.hintT = 0;
+  const d = prDuration(pr.strokes[i]);
+  prAnimate(ms => { pr.hintT = Math.min(1, ms / d); prRender(); return ms < d; });
+}
+
+function prMsg(text, cls) {
+  $('pr-msg').hidden = false;
+  $('pr-msg').textContent = text;
+  $('pr-msg').className = 'pr-msg' + (cls ? ' ' + cls : '');
+}
+
+function prFinish() {
+  const n = pr.strokes.length, m = pr.mistakes;
+  $('pr-stars').textContent = m === 0 ? '★★★' : m <= 2 ? '★★☆' : '★☆☆';
+  $('pr-praise').textContent = m === 0 ? PR_PRAISE[Math.floor(Math.random() * PR_PRAISE.length)] : '完成了，筆順全部正確！';
+  $('pr-sub').textContent = m === 0 ? `「${pr.list[pr.at].ch}」共 ${n} 畫，每一畫都寫對了。` : `「${pr.list[pr.at].ch}」共 ${n} 畫，訂正了 ${m} 次，再練一次會更好！`;
+  $('pr-done').hidden = false;
+  $('pr-msg').hidden = true;
+}
+
+function prPoint(e) {
+  const { cv, pad, k } = prBox(), r = cv.getBoundingClientRect(), sc = cv.width / r.width;
+  return [((e.clientX - r.left) * sc - pad) / k, ((e.clientY - r.top) * sc - pad) / k];
+}
+
+function prDown(e) {
+  if (!pr.strokes || pr.idx >= pr.strokes.length) return;
+  if (pr.demo >= 0) prStart();   // 動畫中直接下筆就跳過動畫
+  e.preventDefault();
+  $('pr-canvas').setPointerCapture(e.pointerId);
+  pr.pts = [prPoint(e)];
+  pr.wrong = null;
+  prRender();
+}
+
+function prMove(e) {
+  if (!pr.pts) return;
+  e.preventDefault();
+  for (const ev of e.getCoalescedEvents ? e.getCoalescedEvents() : [e]) pr.pts.push(prPoint(ev));
+  prRender();
+}
+
+function prUp() {
+  const pts = pr.pts;
+  if (!pts) return;
+  pr.pts = null;
+  if (lenOf(pts) < 12 && lenOf(trackOf(pr.strokes[pr.idx])) > 120) { prMsg('請按住，再畫出一筆。'); prRender(); return; }
+  const r = judgeStroke(pr.strokes, pr.idx, pts);
+  if (r.ok) {
+    ++pr.token;
+    pr.idx++;
+    pr.hint = -1;
+    prRender();
+    if (pr.idx >= pr.strokes.length) prFinish();
+    else prMsg(`第 ${pr.idx} 畫寫對了！接著寫第 ${pr.idx + 1} 畫。`, 'ok');
+  } else {
+    pr.mistakes++;
+    pr.wrong = pts;
+    prMsg(r.msg, 'err');
+    prShowHint(pr.idx);
+  }
+}
+
+function prFit() {
+  const cv = $('pr-canvas'), S = Math.round(cv.getBoundingClientRect().width * Math.min(window.devicePixelRatio || 1, 2));
+  if (S && cv.width !== S) { cv.width = cv.height = S; }
+  prRender();
+}
+
+async function openPractice(i) {
+  pr.list = resolved.filter(r => strokeOf(r.ch));
+  const ch = resolved[i]?.ch;
+  pr.at = Math.max(0, pr.list.findIndex(r => r.ch === ch));
+  const dlg = $('practice');
+  if (!dlg.open) dlg.showModal();
+  prLoad();
+}
+
+function prLoad() {
+  const item = pr.list[pr.at];
+  pr.strokes = item ? strokeOf(item.ch) : null;
+  ++pr.token;
+  Object.assign(pr, { idx: 0, demo: -1, hint: -1, pts: null, wrong: null });
+  $('pr-char').textContent = item ? item.ch : '';
+  $('pr-info').textContent = item ? `${item.use || ''} 共 ${pr.strokes.length} 畫` : '';
+  $('pr-next').hidden = pr.list.length < 2;
+  prFit();
+  if (pr.strokes) prDemo();
+}
+
+$('pr-canvas').addEventListener('pointerdown', prDown);
+$('pr-canvas').addEventListener('pointermove', prMove);
+$('pr-canvas').addEventListener('pointerup', prUp);
+$('pr-canvas').addEventListener('pointercancel', () => { pr.pts = null; prRender(); });
+$('pr-demo').addEventListener('click', prDemo);
+$('pr-again').addEventListener('click', () => prStart());
+$('pr-next').addEventListener('click', () => { pr.at = (pr.at + 1) % pr.list.length; prLoad(); });
+$('pr-guide').addEventListener('change', prRender);
+$('pr-close').addEventListener('click', () => $('practice').close());
+$('practice').addEventListener('close', () => { ++pr.token; });
+window.addEventListener('resize', () => { if ($('practice').open) prFit(); });
 
 restore();
 document.querySelector('.panel').addEventListener('input', schedule);
