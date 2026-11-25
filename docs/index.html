@@ -740,7 +740,7 @@ function drawHeader(ctx, o, pageNo, total) {
   ctx.strokeStyle = '#555';
   ctx.lineWidth = 0.2;
   const y = PAGE.m + 17;
-  const fields = [['姓名', PAGE.m, 76], ['日期', 86, 136], ['家長簽名', 146, PAGE.w - PAGE.m]];
+  const fields = [['姓名', PAGE.m, 100], ['日期', 112, PAGE.w - PAGE.m]];
   for (const [label, x1, x2] of fields) {
     ctx.fillText(label, x1, y);
     const lx = x1 + ctx.measureText(label).width + 2;
@@ -956,7 +956,7 @@ function renderPreview() {
 
 async function ensureFonts() {
   const o = readOpts();
-  const text = o.text + o.title + '國姓名日期家長簽名第頁生字練習ˊˇˋ˙' + resolved.map(r => r.use).join('');
+  const text = o.text + o.title + '國姓名日期第頁生字練習ˊˇˋ˙' + resolved.map(r => r.use).join('');
   try { await document.fonts.load(`40px "LXGW WenKai TC"`, text); } catch (e) {}
 }
 
