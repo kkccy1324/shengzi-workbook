@@ -3,7 +3,7 @@
 Run from the repo root after tools/build.py:  python3 tools/check.py
 Needs: playwright (Python) and a Chrome/Chromium; set CHROME=/path/to/chrome if not at /usr/bin/google-chrome.
 """
-import asyncio, functools, http.server, os, sys, tempfile, threading, zipfile
+import asyncio, functools, http.server, os, re, sys, tempfile, threading, zipfile
 
 from playwright.async_api import async_playwright
 
@@ -35,8 +35,11 @@ async def check_page(pg, errs, label):
     async with pg.expect_download(timeout=30000) as dl:
         await pg.locator('#pdf').click()
     size = os.path.getsize(await (await dl.value).path())
-    ok = state == 'ready' and chips == 7 and size > 10000 and not errs
-    print(f'[{"OK" if ok else "FAIL"}] {label}: dict={state} chars={chips} pdf={size}B status={status} errors={errs}')
+    # 不按「直接列印」、直接用瀏覽器列印（等同 Ctrl+P），每一頁練習頁都要印出來
+    pages = int(re.search(r'(\d+) 頁', status).group(1))
+    printed = len(re.findall(rb'/Type\s*/Page\b', await pg.pdf(prefer_css_page_size=True)))
+    ok = state == 'ready' and chips == 7 and size > 10000 and printed == pages and not errs
+    print(f'[{"OK" if ok else "FAIL"}] {label}: dict={state} chars={chips} pdf={size}B print={printed}/{pages}頁 status={status} errors={errs}')
     return ok
 
 
