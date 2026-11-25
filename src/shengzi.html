@@ -85,9 +85,10 @@ textarea:focus-visible, input:focus-visible, select:focus-visible, button:focus-
 @media print {
   @page { size: A4; margin: 0; }
   :root, body { padding: 0 !important; margin: 0 !important; background: #ffffff !important; }
-  .wrap { display: none !important; }
-  #print-root { display: block; }
-  #print-root img { display: block; width: 210mm; height: 297mm; }
+  body > :not(#print-root) { display: none !important; }
+  #print-root { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* 每張圖就是一整頁 A4；瀏覽器若不採用零邊界，就等比縮小放進可列印範圍，不會把一頁切成兩頁 */
+  #print-root img { display: block; width: 210mm; height: 297mm; max-width: 100%; max-height: 100vh; object-fit: contain; margin: 0 auto; break-inside: avoid; }
   #print-root img:not(:last-child) { break-after: page; }
 }
 .btn-line { font: inherit; font-size: 13px; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
@@ -1027,20 +1028,32 @@ async function exportPdf() {
   }
 }
 
+// 列印內容：把每一頁畫成 A4 圖片放進 #print-root，列印時只印這裡。
+function fillPrintRoot(o, g) {
+  const imgs = [];
+  for (const cv of pageCanvases(o, g)) {
+    const img = new Image();
+    img.src = cv.toDataURL('image/png');
+    img.alt = `第 ${imgs.length + 1} 頁`;
+    imgs.push(img);
+  }
+  $('print-root').replaceChildren(...imgs);
+  return imgs;
+}
+
+// 按鈕準備好的列印內容對應哪一組設定；設定或字典狀態變了，選單列印時就要重畫
+let printKey = '';
+const currentPrintKey = () => JSON.stringify(readOpts()) + dictState;
+
 async function printPages() {
   const btn = $('print');
   btn.disabled = true;
   setMsg('正在準備列印…');
   try {
     const { o, g } = await preparePages();
-    const imgs = [];
-    for (const cv of pageCanvases(o, g)) {
-      const img = new Image();
-      img.src = cv.toDataURL('image/png');
-      imgs.push(img);
-    }
+    const imgs = fillPrintRoot(o, g);
+    printKey = currentPrintKey();
     await Promise.all(imgs.map(img => img.decode().catch(() => {})));
-    $('print-root').replaceChildren(...imgs);
     setMsg('列印時請選 A4、邊界「無」、縮放 100%。');
     window.print();
   } catch (e) {
@@ -1049,6 +1062,15 @@ async function printPages() {
     btn.disabled = false;
   }
 }
+
+// 用瀏覽器選單、Ctrl+P 或手機分享選單列印時沒有經過按鈕，在這裡依目前設定同步補上列印內容，
+// 避免印出空白頁或上一次的舊內容。
+window.addEventListener('beforeprint', () => {
+  if (printKey === currentPrintKey()) return;
+  const o = readOpts();
+  fillPrintRoot(o, plan(o, resolve(parse(o.text), DICT)));
+  printKey = '';
+});
 
 // ---- 筆順動畫與練習 ----
 // 每一筆的資料是 [外框路徑, 起筆 x, 起筆 y, 運筆路線 [x0, y0, x1, y1, …]]，座標在 1024 × 1024 的方框裡。
